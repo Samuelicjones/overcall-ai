@@ -1,91 +1,100 @@
-# Overcall AI 🧠📞
+# Overcall AI ⚡📞
 
-Your AI copilot that sits on top of Zoom, Google Meet, Teams & Webex.
+Your AI copilot that floats over Zoom, Google Meet, Teams & Webex.
 
-It watches the call (with consent), figures out **who you're talking to**, pulls **LinkedIn / web context**, listens to **what's being said**, and serves you a realtime overlay with:
+With consent, it figures out **who you're talking to**, listens to **what's being said**, and serves a realtime overlay:
 
-- 👤 **Who's who** — name, role, company, background, mutuals
-- 💡 **Smart talking points** — relevant to their background + live conversation
-- ✅ **Live fact-checks** — claims, numbers, competitors, news
-- 🔎 **Realtime intel** — docs, pricing, stats, web results without tab-switching
+- 👤 **Who's who** — role, company, background, LinkedIn
+- 💡 **Say this next** — talking points grounded in their background + live transcript
+- ✅ **Live fact-checks** — verdicts with cited sources
+- 🔎 **Realtime intel** — pricing, competitors, news without tab-switching
+- 📋 **Meeting brief** — summary, decisions, action items, follow-up draft
 
-> Think: Granola + Perplexity + LinkedIn Sales Nav, floating over your meeting.
+> Granola + Perplexity + LinkedIn Sales Nav, floating over your meeting. **Gemini-native, free tier friendly.**
+
+## 5-minute setup (Gemini)
+
+1. **Free Gemini key** → https://aistudio.google.com → Get API key
+2. **Clone + install** (Node 20+):
+```bash
+git clone https://github.com/Samuelicjones/overcall-ai.git
+cd overcall-ai
+npm install
+cp .env.example .env
+```
+3. **Edit `.env`** — minimum for full AI:
+```
+GEMINI_API_KEY=AIzaSy...your-key
+LLM_PROVIDER=gemini
+LLM_MODEL=gemini-2.0-flash
+# optional but recommended for live fact-checks:
+TAVILY_API_KEY=tvly-...   # https://tavily.com (free tier)
+```
+4. **Run**:
+```bash
+npm run dev          # server (8787) + overlay (5173)
+```
+5. **Use on a call**:
+- Paste roster → **People → Enrich roster**
+- Paste captions (or hit **○ Mic (free)** in Chrome/Edge, or install the Meet companion below)
+- Watch **● Live** for talking points + fact-checks → **Brief** for the follow-up
+
+Health check: http://localhost:8787/health shows `provider: gemini`, `mockMode: false`.
 
 ## How it works
 
 ```
 [Zoom / Meet / Teams]
-        │ captions + roster + audio (with consent)
+        │ captions + roster (with consent: mic button / paste / Meet companion)
         ▼
-[apps/overlay - Electron transparent window]
-        │ websocket: transcript chunks, active speaker
+[apps/overlay — Electron transparent click-through window]
+        │ WS /ws/stream : transcript + roster in → talking-points + fact-checks out
         ▼
-[server - Node API + orchestrator]
-   ├─► people-resolver (LinkedIn enrichment via Proxycurl / RocketReach / manual add)
-   ├─► transcriber (Deepgram / Whisper)
-   ├─► web-search (Tavily / Brave / Exa)
-   └─► LLM (OpenAI / Anthropic) → talking points, fact-checks, summaries
-        ▼
-[overlay UI] person cards, talking points feed, fact-check ticker
+[server — Fastify + WS]
+   ├─► llm.ts (Gemini → OpenAI → Anthropic → Ollama → mock)
+   ├─► peopleResolver (Proxycurl / RocketReach / manual — never scrape LinkedIn)
+   ├─► webIntel (Tavily → Brave → Exa → mock) + LLM verdicts
+   └─► talkingPoints + brief
 ```
 
-See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for full system design.
-
-## Quickstart
-
-```bash
-# 1. clone
-git clone https://github.com/YOUR_USERNAME/overcall-ai.git
-cd overcall-ai
-
-# 2. install (Node 20+)
-npm install
-
-# 3. configure
-cp .env.example .env
-# fill in OPENAI_API_KEY, TAVILY_API_KEY, DEEPGRAM_API_KEY, PROXYCURL_API_KEY etc.
-
-# 4. run backend + overlay in dev
-npm run dev
-```
-
-- Server: http://localhost:8787 (health: `/health`, WS: `/ws/stream`)
-- Overlay: Electron transparent window, `Ctrl+Shift+O` to toggle, `Ctrl+Shift+H` to hide.
+See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
 ## Repo layout
 
 ```
 overcall-ai/
-  apps/overlay/        # Electron + Vite + React + TS — always-on-top transparent overlay
-  server/              # Node + Fastify + WS — transcription, people lookup, search, LLM
-  packages/shared/     # Shared TS types (Person, TalkingPoint, FactCheck, TranscriptChunk)
-  docs/                # ARCHITECTURE, ROADMAP, PRIVACY (important!)
+  apps/overlay/         # Electron + Vite + React — click-through overlay (tabs: Live/People/Search/Brief/Settings)
+  apps/meet-companion/  # Chrome extension — forwards Meet captions + roster to localhost (optional)
+  server/               # Fastify + WS API — /api/config|search|fact-check|talking-points|brief|people/*
+  packages/shared/      # Shared TS types
+  docs/                 # ARCHITECTURE, ROADMAP, PRIVACY (read this!)
 ```
 
-## Key features (v0.1 starter — all wired with stubs)
+## API cheat sheet
 
-- [x] Click-through overlay scaffold
-- [x] Roster capture (paste names / CSV, Meet captions observer stub, Zoom SDK hook stub)
-- [x] Person enrichment API (`POST /api/people/enrich`) — Proxycurl-ready, mock fallback
-- [x] Realtime transcript WS (`/ws/stream`) + talking-points engine
-- [x] Fact-check API (`POST /api/fact-check`) + web search abstraction (Tavily-ready)
-- [x] Privacy-first defaults: consent banner, local-first option, no secret recording
+| Endpoint | Purpose |
+|---|---|
+| `GET /health`, `GET /api/config` | provider/key status (no secrets leaked) |
+| `POST /api/people/batch` | enrich roster → person cards |
+| `POST /api/talking-points` | transcript + people → 3 next lines |
+| `POST /api/fact-check` | claim → verdict + sources |
+| `POST /api/search` | live web intel |
+| `POST /api/brief` | post-meeting markdown brief |
+| `WS /ws/stream` | realtime: `transcript`/`roster` in, `talking-points`/`fact-check` out |
 
-## Legal / privacy — READ THIS
+## Meet companion (optional, Chrome)
 
-This tool **must only be used with informed consent** from all meeting participants where required by law (two-party consent states, GDPR, etc.).
+No bots: reads captions you already see. See [`apps/meet-companion/README.md`](apps/meet-companion/README.md).
+1. `chrome://extensions` → Developer mode → Load unpacked → `apps/meet-companion/`
+2. Enable, join Meet with CC on, announce the assistant.
 
-- No scraping LinkedIn in violation of ToS — use official enrichment APIs (Proxycurl, RocketReach, People Data Labs) or user-provided profiles.
-- No stealth recording — show the consent banner, announce the assistant.
-- See [`docs/PRIVACY.md`](docs/PRIVACY.md).
+## Privacy — READ THIS
+
+Only with informed consent (two-party states, GDPR). No LinkedIn scraping — enrichment APIs or manual paste only. No audio stored by default; transcripts live in memory. See [`docs/PRIVACY.md`](docs/PRIVACY.md).
 
 ## Roadmap
 
-See [`docs/ROADMAP.md`](docs/ROADMAP.md) — next: Meet Chrome observer, Zoom Meeting SDK, vector memory, CRM push.
-
-## Contributing
-
-PRs welcome. Run `npm run typecheck` + `npm run lint` before pushing.
+v0.2 done here: Gemini verdicts, brief, Meet companion, mic mode. Next: Zoom SDK, speaker diarization, CRM push. See [`docs/ROADMAP.md`](docs/ROADMAP.md).
 
 ## License
 

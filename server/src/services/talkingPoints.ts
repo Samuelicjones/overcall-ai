@@ -1,7 +1,7 @@
-// Talking-points engine — LLM when keys exist, smart template fallback otherwise.
-import OpenAI from 'openai';
+// Talking-points engine — Gemini-first via unified LLM layer, template fallback in mock mode.
+import { activeProvider, completeJSON } from './llm.js';
 
-interface PersonCtx {
+export interface PersonCtx {
   displayName: string;
   title?: string;
   company?: string;
@@ -9,41 +9,32 @@ interface PersonCtx {
 }
 
 export async function talkingPointsFor(transcript: string, people: PersonCtx[]) {
-  const apiKey = process.env.OPENAI_API_KEY;
-  if (apiKey) {
+  const provider = activeProvider();
+  if (provider !== 'mock') {
     try {
-      const client = new OpenAI({ apiKey });
-      const model = process.env.LLM_MODEL ?? 'gpt-4o-mini';
       const peopleStr = people.length
         ? people.map((p) => `- ${p.displayName}${p.title ? `, ${p.title}` : ''}${p.company ? ` @ ${p.company}` : ''}${p.summary ? `: ${p.summary}` : ''}`).join('\n')
         : 'No enriched profiles yet.';
-      const completion = await client.chat.completions.create({
-        model,
-        messages: [
-          {
-            role: 'system',
-            content:
-              'You are Overcall AI, a meeting copilot. Given the live transcript and participant bios, output 3 concise, high-leverage talking points or questions. Each ≤20 words. No fluff. Return JSON array of {text, relevance}.'
-          },
-          { role: 'user', content: `PARTICIPANTS:\n${peopleStr}\n\nTRANSCRIPT (last ~3000 chars):\n${transcript.slice(-3000)}` }
-        ],
-        response_format: { type: 'json_object' }
-      });
-      const raw = completion.choices[0]?.message?.content ?? '{"points":[]}';
-      const parsed: any = JSON.parse(raw);
+      const parsed: any = await completeJSON(
+        'You are Overcall AI, a meeting copilot. Given the live transcript and participant bios, output 3 concise, high-leverage talking points or questions. Each max 20 words. No fluff, no generic flattery. Return {"points": [{"text": "...", "relevance": "..."}]}.',
+        `PARTICIPANTS:\n${peopleStr}\n\nTRANSCRIPT (last ~3000 chars):\n${transcript.slice(-3000)}`
+      );
       const arr = Array.isArray(parsed) ? parsed : parsed.points ?? [];
-      return arr.slice(0, 3).map((p: any, i: number) => ({
-        id: `tp-${Date.now()}-${i}`,
-        text: String(p.text ?? p),
-        relevance: String(p.relevance ?? 'Live transcript + profile match'),
-        createdAt: new Date().toISOString()
-      }));
+      if (arr.length) {
+        return arr.slice(0, 3).map((p: any, i: number) => ({
+          id: `tp-${Date.now()}-${i}`,
+          text: String(p.text ?? p),
+          relevance: String(p.relevance ?? 'Live transcript + profile match'),
+          forPerson: people[0]?.displayName,
+          createdAt: new Date().toISOString()
+        }));
+      }
     } catch (e) {
-      console.error('LLM talking-points failed, using fallback', e);
+      console.error(`LLM talking-points failed (${provider}), using fallback`, e);
     }
   }
 
-  // Fallback: extract keywords + tailor to people
+  // Fallback: extract keywords + tailor to people (works with zero keys)
   const keywords = transcript
     .toLowerCase()
     .replace(/[^a-z0-9\s]/g, '')
@@ -64,6 +55,7 @@ export async function talkingPointsFor(transcript: string, people: PersonCtx[]) 
         ? `Tie it to ${people[0].company}: "Is that similar to what you're seeing at ${people[0].company}?"`
         : 'Ask: "What does success look like for you in the next 90 days?"',
       relevance: 'Personalized to participant company',
+      forPerson: people[0]?.displayName,
       createdAt: new Date().toISOString()
     },
     {

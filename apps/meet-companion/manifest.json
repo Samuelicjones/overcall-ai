@@ -1,0 +1,16 @@
+{
+  "manifest_version": 3,
+  "name": "Overcall AI — Meet Companion",
+  "version": "0.2.0",
+  "description": "Sends Google Meet captions + roster to your local Overcall AI overlay (with consent).",
+  "permissions": ["storage"],
+  "host_permissions": ["http://localhost:8787/*", "https://meet.google.com/*"],
+  "content_scripts": [
+    {
+      "matches": ["https://meet.google.com/*"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "action": { "default_popup": "popup.html", "default_title": "Overcall AI" }
+}

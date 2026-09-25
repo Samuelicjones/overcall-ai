@@ -1,0 +1,11 @@
+<!doctype html><html><body style="width:260px;font-family:sans-serif;padding:12px">
+<h3>⚡ Overcall AI</h3>
+<p style="font-size:12px">Forward Meet captions to your overlay.<br><b>Announce it on the call first.</b></p>
+<label style="font-size:13px"><input type="checkbox" id="en"> Enable on Meet</label>
+<p style="font-size:11px;color:#666">Server: http://localhost:8787<br>Overlay shows talking points + fact-checks live.</p>
+<script>
+const el = document.getElementById('en');
+chrome.storage.local.get('enabled', d => el.checked = !!d.enabled);
+el.onchange = () => chrome.storage.local.set({enabled: el.checked});
+</script>
+</body></html>
